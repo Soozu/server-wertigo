@@ -1,6 +1,145 @@
-# WerTigo Trip Planner - Backend API
+# WerTigo Python Backend
 
-A Flask-based backend API for the WerTigo Trip Planner that provides AI-powered destination recommendations, trip management, and route planning for Philippine destinations.
+AI-powered recommendation engine and route calculation service for the WerTigo travel planner.
+
+## Overview
+
+This Python backend focuses on AI-powered features and computational services:
+
+- 🤖 **AI Recommendations**: Machine learning-based destination recommendations
+- 🗺️ **Geocoding**: Location name to coordinates conversion
+- 🛣️ **Route Calculation**: Intelligent route planning between destinations
+- 🧠 **Neural Model**: Advanced recommendation using RoBERTa embeddings
+
+## Architecture
+
+**Hybrid Backend Setup:**
+- **Python Backend** (Port 5000): AI recommendations, geocoding, route calculation
+- **Express Backend** (Port 3001): Authentication, tickets, reviews, trip sharing
+
+## Features
+
+### AI Recommendations
+- TF-IDF based similarity matching
+- Neural model with RoBERTa embeddings
+- Context-aware query understanding
+- Philippine destinations specialization
+
+### Route Calculation
+- OpenRouteService integration
+- OSRM fallback routing
+- Intelligent curve generation for island routes
+- Philippine geography optimization
+
+### Geocoding
+- Nominatim OpenStreetMap integration
+- Philippines-focused location search
+- Coordinate conversion services
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Health check |
+| POST | `/api/create-session` | Create user session |
+| POST | `/api/recommend` | Get AI recommendations |
+| GET | `/api/cities` | Available cities |
+| GET | `/api/categories` | Available categories |
+| GET | `/api/geocode` | Geocode locations |
+| POST | `/api/route` | Calculate routes |
+| POST | `/api/model/chat` | Neural model chat |
+| GET | `/api/model/status` | Model status |
+
+## Installation
+
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Set up dataset:**
+   ```bash
+   # Ensure dataset/final_dataset.csv exists
+   ```
+
+3. **Run the server:**
+   ```bash
+   python run_server.py
+   # or
+   python app.py
+   ```
+
+## Dependencies
+
+- Flask - Web framework
+- pandas - Data manipulation
+- scikit-learn - Machine learning
+- torch - Neural networks
+- transformers - RoBERTa model
+- requests - HTTP client
+
+## Integration
+
+The Python backend works alongside the Express.js backend:
+
+```javascript
+// Frontend integration example
+const PYTHON_API = 'http://localhost:5000/api';
+const EXPRESS_API = 'http://localhost:3001/api';
+
+// AI recommendations (Python)
+const recommendations = await fetch(`${PYTHON_API}/recommend`, {
+  method: 'POST',
+  body: JSON.stringify({ query: 'beaches in Boracay' })
+});
+
+// Authentication (Express)
+const auth = await fetch(`${EXPRESS_API}/auth/login`, {
+  method: 'POST',
+  body: JSON.stringify({ email, password })
+});
+```
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `HOST` | Server host | `0.0.0.0` |
+| `PORT` | Server port | `5000` |
+| `DEBUG` | Debug mode | `True` |
+
+## Development
+
+```bash
+# Start in development mode
+python run_server.py
+
+# Check model status
+curl http://localhost:5000/api/model/status
+
+# Test recommendations
+curl -X POST http://localhost:5000/api/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"query": "beautiful beaches in Philippines"}'
+```
+
+## Migration Notes
+
+**Removed from Python Backend:**
+- ❌ Authentication routes (`/api/auth/*`)
+- ❌ Ticket management (`/api/tickets/*`)
+- ❌ Trip CRUD operations (`/api/trips/*`)
+- ❌ Database connections and ORM
+- ❌ User session management
+
+**Kept in Python Backend:**
+- ✅ AI recommendation engine
+- ✅ Geocoding services
+- ✅ Route calculation
+- ✅ Neural model inference
+- ✅ Philippine destinations data
+
+This focused approach allows the Python backend to excel at AI and computational tasks while the Express backend handles data persistence and user management.
 
 ## 🚀 Features
 

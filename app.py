@@ -16,16 +16,6 @@ import logging
 import torch
 import math
 
-# Import auth routes
-from routes.auth_routes import auth_bp
-from routes.trips_routes import trips_bp
-from routes.ticket_routes import ticket_bp
-from db import (
-    create_tables, create_trip_db, get_trip_db, update_trip_db,
-    add_destination_to_trip_db, remove_destination_from_trip_db,
-    save_trip_route_db, get_user_trips_db
-)
-
 # Import model components
 from model import (
     DestinationRecommender, 
@@ -43,11 +33,6 @@ CORS(app, supports_credentials=True)
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Register auth blueprint
-app.register_blueprint(auth_bp, url_prefix='/api/auth')
-app.register_blueprint(trips_bp, url_prefix='/api/trips')
-app.register_blueprint(ticket_bp, url_prefix='/api/tickets')
 
 # Global variables for AI model and data
 df = None
@@ -330,7 +315,8 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'model_loaded': recommendation_engine is not None
+        'model_loaded': recommendation_engine is not None,
+        'service': 'python-backend'
     })
 
 @app.route('/api/create-session', methods=['POST'])
@@ -495,286 +481,12 @@ def geocode():
         traceback.print_exc()
         return jsonify({'error': 'Geocoding service unavailable'}), 500
 
-# Trip management with database persistence
-
-@app.route('/api/trips', methods=['POST'])
-def create_trip():
-    """Create a new trip"""
-    try:
-        data = request.get_json()
-        
-        trip_id = str(uuid.uuid4())
-        session_id = session.get('session_id')
-        user_id = session.get('user_id')  # Get user_id if logged in
-        
-        # Create trip in database
-        success = create_trip_db(trip_id, user_id, session_id, data)
-        
-        if success:
-            # Get the created trip to return full data
-            trip_data = get_trip_db(trip_id, user_id, session_id)
-            
-            return jsonify({
-                'success': True,
-                'trip_id': trip_id,
-                'trip': trip_data,
-                'message': 'Trip created successfully'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to create trip'
-            }), 500
-        
-    except Exception as e:
-        logger.error(f"Error creating trip: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to create trip'
-        }), 500
-
-@app.route('/api/trips/<trip_id>', methods=['GET'])
-def get_trip(trip_id):
-    """Get trip details"""
-    try:
-        session_id = session.get('session_id')
-        user_id = session.get('user_id')
-        
-        trip_data = get_trip_db(trip_id, user_id, session_id)
-        
-        if trip_data:
-            return jsonify({
-                'success': True,
-                'trip': trip_data
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Trip not found'
-            }), 404
-            
-    except Exception as e:
-        logger.error(f"Error getting trip: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to get trip'
-        }), 500
-
-@app.route('/api/trips/<trip_id>', methods=['PUT'])
-def update_trip(trip_id):
-    """Update trip details"""
-    try:
-        data = request.get_json()
-        session_id = session.get('session_id')
-        user_id = session.get('user_id')
-        
-        success = update_trip_db(trip_id, data, user_id, session_id)
-        
-        if success:
-            # Get updated trip data
-            trip_data = get_trip_db(trip_id, user_id, session_id)
-            
-            return jsonify({
-                'success': True,
-                'message': 'Trip updated successfully',
-                'trip': trip_data
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Trip not found or update failed'
-            }), 404
-        
-    except Exception as e:
-        logger.error(f"Error updating trip: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to update trip'
-        }), 500
-
-@app.route('/api/trips/<trip_id>/destinations', methods=['POST'])
-def add_destination_to_trip(trip_id):
-    """Add a destination to a trip"""
-    try:
-        data = request.get_json()
-        session_id = session.get('session_id')
-        user_id = session.get('user_id')
-        
-        # Verify trip exists and user has access
-        trip_data = get_trip_db(trip_id, user_id, session_id)
-        if not trip_data:
-            return jsonify({
-                'success': False,
-                'error': 'Trip not found'
-            }), 404
-        
-        # Add destination to trip
-        destination_id = add_destination_to_trip_db(trip_id, data)
-        
-        if destination_id:
-            # Get updated trip data
-            updated_trip = get_trip_db(trip_id, user_id, session_id)
-            
-            return jsonify({
-                'success': True,
-                'message': 'Destination added successfully',
-                'destination_id': destination_id,
-                'trip': updated_trip
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to add destination'
-            }), 500
-            
-    except Exception as e:
-        logger.error(f"Error adding destination to trip: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to add destination'
-        }), 500
-
-@app.route('/api/trips/<trip_id>/destinations/<int:destination_id>', methods=['DELETE'])
-def remove_destination_from_trip(trip_id, destination_id):
-    """Remove a destination from a trip"""
-    try:
-        session_id = session.get('session_id')
-        user_id = session.get('user_id')
-        
-        # Verify trip exists and user has access
-        trip_data = get_trip_db(trip_id, user_id, session_id)
-        if not trip_data:
-            return jsonify({
-                'success': False,
-                'error': 'Trip not found'
-            }), 404
-        
-        # Remove destination from trip
-        success = remove_destination_from_trip_db(trip_id, destination_id)
-        
-        if success:
-            # Get updated trip data
-            updated_trip = get_trip_db(trip_id, user_id, session_id)
-            
-            return jsonify({
-                'success': True,
-                'message': 'Destination removed successfully',
-                'trip': updated_trip
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to remove destination'
-            }), 500
-            
-    except Exception as e:
-        logger.error(f"Error removing destination from trip: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to remove destination'
-        }), 500
-
-@app.route('/api/trips/<trip_id>/route', methods=['POST'])
-def save_trip_route(trip_id):
-    """Save route data for a trip"""
-    try:
-        data = request.get_json()
-        session_id = session.get('session_id')
-        user_id = session.get('user_id')
-        
-        # Verify trip exists and user has access
-        trip_data = get_trip_db(trip_id, user_id, session_id)
-        if not trip_data:
-            return jsonify({
-                'success': False,
-                'error': 'Trip not found'
-            }), 404
-        
-        # Save route data
-        success = save_trip_route_db(trip_id, data)
-        
-        if success:
-            return jsonify({
-                'success': True,
-                'message': 'Route saved successfully'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to save route'
-            }), 500
-            
-    except Exception as e:
-        logger.error(f"Error saving trip route: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to save route'
-        }), 500
-
-@app.route('/api/my-trips', methods=['GET'])
-def get_my_trips():
-    """Get all trips for the current user/session"""
-    try:
-        session_id = session.get('session_id')
-        user_id = session.get('user_id')
-        
-        if user_id:
-            # Get trips for logged-in user
-            trips = get_user_trips_db(user_id)
-        else:
-            # For anonymous users, get trips by session_id
-            query = """
-            SELECT t.*, 
-                   COUNT(td.id) as destination_count,
-                   CASE WHEN tr.id IS NOT NULL THEN 1 ELSE 0 END as has_route
-            FROM trips t
-            LEFT JOIN trip_destinations td ON t.id = td.trip_id
-            LEFT JOIN trip_routes tr ON t.id = tr.trip_id
-            WHERE t.session_id = %s
-            GROUP BY t.id
-            ORDER BY t.updated_at DESC
-            """
-            from db import execute_query
-            trips_data = execute_query(query, (session_id,))
-            
-            trips = []
-            for trip in trips_data or []:
-                trip_data = {
-                    'id': trip['id'],
-                    'trip_name': trip['trip_name'],
-                    'destination': trip['destination'],
-                    'start_date': trip['start_date'].isoformat() if trip['start_date'] else None,
-                    'end_date': trip['end_date'].isoformat() if trip['end_date'] else None,
-                    'budget': float(trip['budget']) if trip['budget'] else 0,
-                    'travelers': trip['travelers'],
-                    'status': trip['status'],
-                    'created_at': trip['created_at'].isoformat() if trip['created_at'] else None,
-                    'updated_at': trip['updated_at'].isoformat() if trip['updated_at'] else None,
-                    'destination_count': trip['destination_count'],
-                    'has_route': bool(trip['has_route'])
-                }
-                trips.append(trip_data)
-        
-        return jsonify({
-            'success': True,
-            'trips': trips,
-            'count': len(trips)
-        })
-        
-    except Exception as e:
-        logger.error(f"Error getting user trips: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to get trips'
-        }), 500
-
 @app.route('/api/route', methods=['POST'])
 def calculate_route():
     """Calculate route between destinations using OpenRouteService"""
     try:
         data = request.get_json()
         points = data.get('points', [])
-        trip_id = data.get('trip_id')  # Optional trip ID to save route
         
         if len(points) < 2:
             return jsonify({'error': 'At least 2 points required'}), 400
@@ -785,9 +497,6 @@ def calculate_route():
         try:
             route_data = get_road_route(points)
             if route_data:
-                # Save route to database if trip_id is provided
-                if trip_id:
-                    save_trip_route_db(trip_id, route_data)
                 return jsonify(route_data)
         except Exception as e:
             logger.warning(f"OpenRouteService failed, falling back to simple routing: {e}")
@@ -828,10 +537,6 @@ def calculate_route():
             'points': route_points,
             'fallback': True
         }
-        
-        # Save route to database if trip_id is provided
-        if trip_id:
-            save_trip_route_db(trip_id, route_data)
         
         return jsonify(route_data)
         
@@ -1259,13 +964,6 @@ if __name__ == '__main__':
     
     # Initialize the recommendation engine
     init_recommendation_engine()
-    
-    # Initialize database tables
-    try:
-        create_tables()
-        logger.info("Database tables initialized")
-    except Exception as e:
-        logger.error(f"Error initializing database tables: {e}")
     
     # Initialize neural model
     try:
